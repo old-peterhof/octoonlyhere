@@ -529,10 +529,12 @@ class PrintPocketPlugin(
             "printpocket": {
                 "displayName": "PrintPocket",
                 "displayVersion": self._plugin_version,
-                "type": "github_release",
+                # No release tags yet: offer updates whenever main moves.
+                "type": "github_commit",
                 "user": "old-peterhof",
                 "repo": "octoonlyhere",
-                "current": self._plugin_version,
+                "branch": "main",
+                "current": None,
                 "pip": "https://github.com/old-peterhof/octoonlyhere/archive/{target_version}.zip",
             }
         }
