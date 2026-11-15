@@ -45,26 +45,20 @@ Each Pi gets its own home screen icon, named after the printer.
 
 ### 1. Install the plugin on each Pi
 
-**While this repo is private** (OctoPrint can't download from a private repo):
-
-1. On GitHub, open this repo, click **Code**, then **Download ZIP**.
-2. In OctoPrint, open Settings, then Plugin Manager, then **Get More**. Under **...from an uploaded file**, choose that zip and click Upload.
-3. Restart OctoPrint when it asks.
-
-To update later, do the same with a fresh zip. The automatic update check in OctoPrint's Software Update screen only works once the repo is public.
-
-**If the repo is public**, paste this under **...from URL** instead:
+In OctoPrint, open Settings, then Plugin Manager, then **Get More**. Under **...from URL**, paste the line below, click Install, and restart OctoPrint when it asks.
 
 ```
 https://github.com/old-peterhof/octoonlyhere/archive/main.zip
 ```
 
-Or install it over SSH:
+You can also install it over SSH on OctoPi:
 
 ```bash
 ~/oprint/bin/pip install https://github.com/old-peterhof/octoonlyhere/archive/main.zip
 sudo service octoprint restart
 ```
+
+Updates show up in OctoPrint's Software Update screen whenever `main` changes.
 
 ### 2. Put the app on your phone
 
