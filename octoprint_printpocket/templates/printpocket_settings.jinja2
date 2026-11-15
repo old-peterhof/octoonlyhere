@@ -1,0 +1,38 @@
+<h3>PrintPocket</h3>
+
+<p>
+  Open <a href="{{ url_for('plugin.printpocket.app_index') }}" target="_blank" rel="noopener">{{ url_for('plugin.printpocket.app_index') }}</a>
+  on your phone, then use <strong>Add to Home Screen</strong>.
+</p>
+<p class="muted">
+  For notifications and away-from-home access, reach this Pi through Tailscale with HTTPS
+  (<code>sudo tailscale serve --bg 80</code>) and open the app from the
+  <code>https://&lt;pi-name&gt;.&lt;tailnet&gt;.ts.net</code> address. See the README for details.
+</p>
+
+<form class="form-horizontal" onsubmit="return false;">
+  <div class="control-group">
+    <label class="control-label">Printer name</label>
+    <div class="controls">
+      <input type="text" class="input-large" data-bind="value: settings.plugins.printpocket.printer_name" placeholder="Defaults to the OctoPrint instance name">
+      <span class="help-block">Shown in notifications and under the home screen icon.</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label">Progress updates every</label>
+    <div class="controls">
+      <div class="input-append">
+        <input type="number" min="0" max="50" step="5" class="input-mini" data-bind="value: settings.plugins.printpocket.progress_step">
+        <span class="add-on">%</span>
+      </div>
+      <span class="help-block">Only sent to devices that turned on progress alerts. 0 turns them off.</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label">Push contact</label>
+    <div class="controls">
+      <input type="text" class="input-xlarge" data-bind="value: settings.plugins.printpocket.vapid_subject">
+      <span class="help-block">A <code>mailto:</code> address sent to push services in case they need to reach the sender. Any address of yours works.</span>
+    </div>
+  </div>
+</form>

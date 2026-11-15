@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PrintPocket">
+  <title>PrintPocket</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="static/app/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="static/app/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="static/app/app.css">
+</head>
+<body>
+
+<!-- Sign in -->
+<section id="login" class="login" hidden>
+  <div class="box">
+    <img src="static/app/icons/icon-192.png" alt="">
+    <h1>PrintPocket</h1>
+    <p id="login-msg">Connect this device to OctoPrint.</p>
+    <button id="login-start" class="btn primary">Connect</button>
+    <div id="login-wait" hidden>
+      <p>Approve <strong>PrintPocket</strong> in the popup on any open OctoPrint page, or:</p>
+      <a id="login-approve" class="btn" target="_blank" rel="noopener">Approve here</a>
+      <button id="login-cancel" class="btn">Cancel</button>
+    </div>
+    <details>
+      <summary>Use an API key instead</summary>
+      <p style="margin-top:12px">In OctoPrint go to Settings, Application Keys, enter <em>PrintPocket</em> and press Generate. Paste the key here.</p>
+      <input id="login-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="API key">
+      <button id="login-key-save" class="btn">Save key</button>
+    </details>
+  </div>
+</section>
+
+<!-- App -->
+<div id="app" hidden>
+  <header class="topbar">
+    <h1 id="printer-name">Printer</h1>
+    <span id="state" class="pill">Connecting</span>
+  </header>
+
+  <main>
+    <!-- Printer tab -->
+    <section id="tab-printer">
+      <div id="cam" class="card cam" hidden>
+        <img id="cam-img" alt="Webcam">
+        <div id="cam-msg" class="cam-msg" hidden>Camera unavailable</div>
+        <div class="cam-tools">
+          <button id="cam-live" class="chip on">Live</button>
+          <button id="cam-full" class="chip" aria-label="Full screen">⤢</button>
+        </div>
+      </div>
+
+      <div id="offline" class="card" hidden>
+        <h2>Printer</h2>
+        <p id="offline-msg" class="note">The printer is not connected to OctoPrint.</p>
+        <div class="row">
+          <button id="connect" class="btn primary">Connect printer</button>
+        </div>
+      </div>
+
+      <div id="job-card" class="card">
+        <h2>Job</h2>
+        <div class="job">
+          <div class="ring">
+            <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle id="ring-bar" class="bar" cx="60" cy="60" r="52"/></svg>
+            <div id="pct" class="pct">0%</div>
+          </div>
+          <div>
+            <div id="file" class="file">No file selected</div>
+            <div class="stats">
+              <div class="stat"><div class="k">Elapsed</div><div id="elapsed" class="v">-</div></div>
+              <div class="stat"><div class="k">Left</div><div id="left" class="v">-</div></div>
+              <div class="stat"><div class="k">Done at</div><div id="eta" class="v">-</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <button id="pause" class="btn" disabled>Pause</button>
+          <button id="cancel" class="btn danger" disabled>Cancel</button>
+        </div>
+      </div>
+
+      <div id="temps-card" class="card">
+        <h2>Temperatures</h2>
+        <div id="temps" class="temps"></div>
+        <div id="presets" class="presets"></div>
+      </div>
+    </section>
+
+    <!-- Files tab -->
+    <section id="tab-files" hidden>
+      <input id="search" class="search" type="search" placeholder="Search files">
+      <ul id="files" class="list"></ul>
+    </section>
+
+    <!-- Alerts tab -->
+    <section id="tab-alerts" hidden>
+      <div class="card">
+        <h2>Notifications</h2>
+        <p id="push-note" class="note"></p>
+        <div class="row">
+          <button id="push-enable" class="btn primary">Turn on notifications</button>
+        </div>
+        <div id="push-events" hidden></div>
+        <div id="push-actions" class="row" hidden>
+          <button id="push-test" class="btn">Send a test</button>
+          <button id="push-disable" class="btn danger">Turn off</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>This device</h2>
+        <p class="note" id="about"></p>
+        <div class="row">
+          <a class="btn" id="open-octoprint" href="../../" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Open OctoPrint</a>
+          <button id="logout" class="btn danger">Sign out</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs">
+    <button data-tab="printer" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v3l3 2 3-2V9"/><path d="M7 20v-3h10v3"/></svg>
+      Printer
+    </button>
+    <button data-tab="files">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
+      Files
+    </button>
+    <button data-tab="alerts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      Alerts
+    </button>
+  </nav>
+</div>
+
+<dialog id="confirm">
+  <form method="dialog">
+    <h3 id="confirm-title"></h3>
+    <p id="confirm-body"></p>
+    <div class="row">
+      <button value="no" class="btn">Back</button>
+      <button value="yes" id="confirm-yes" class="btn primary">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="tempdlg">
+  <form method="dialog">
+    <h3 id="temp-title">Set temperature</h3>
+    <p>Target in °C. 0 turns the heater off.</p>
+    <input id="temp-input" type="number" inputmode="numeric" min="0" max="350">
+    <div class="row">
+      <button value="no" class="btn">Back</button>
+      <button value="yes" class="btn primary">Set</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast"></div>
+
+<script src="static/app/app.js"></script>
+</body>
+</html>
