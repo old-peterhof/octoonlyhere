@@ -1,5 +1,7 @@
 # PrintPocket
 
+> Access octopi on my own by myself, no one else, nope.
+
 A phone app for your OctoPrint printers that you host yourself. No cloud account, no subscription and no AI.
 
 PrintPocket is an OctoPrint plugin. It serves a small, phone-sized web app from your Pi that you add to your home screen. Pair it once with a six-character code and you never type your OctoPrint password on your phone again.
