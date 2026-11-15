@@ -46,13 +46,13 @@ Each Pi gets its own home screen icon, named after the printer.
 In OctoPrint, open Settings, then Plugin Manager, then **Get More**. Under **...from URL**, paste the line below, click Install, and restart OctoPrint when it asks.
 
 ```
-https://github.com/CHANGE_ME/octoonlyhere/archive/main.zip
+https://github.com/old-peterhof/octoonlyhere/archive/main.zip
 ```
 
 You can also install it over SSH on OctoPi:
 
 ```bash
-~/oprint/bin/pip install https://github.com/CHANGE_ME/octoonlyhere/archive/main.zip
+~/oprint/bin/pip install https://github.com/old-peterhof/octoonlyhere/archive/main.zip
 sudo service octoprint restart
 ```
 
