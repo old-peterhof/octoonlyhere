@@ -402,3 +402,20 @@ dialog input {
   max-width: 90vw;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* pairing */
+.code-input {
+  text-align: center;
+  font-size: 28px !important;
+  letter-spacing: 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  text-transform: uppercase;
+}
+.login .hint { font-size: 14px; margin-top: 4px; }
+
+/* upload */
+.files-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+.files-bar .search { margin-bottom: 0; flex: 1; }
+.upload { cursor: pointer; padding: 12px 16px; }
+.upload-progress { height: 6px; border-radius: 3px; background: var(--card); overflow: hidden; margin-bottom: 12px; }
+.upload-progress div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }

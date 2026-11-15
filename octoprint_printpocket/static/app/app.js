@@ -597,6 +597,51 @@
 
   $("search").addEventListener("input", renderFiles);
 
+  $("upload").addEventListener("change", async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    if (!/\.(gcode|gco|g|bgcode)$/i.test(file.name)) {
+      return toast("Pick a .gcode file");
+    }
+    const bar = $("upload-progress");
+    bar.hidden = false;
+    bar.firstElementChild.style.width = "0%";
+    try {
+      await uploadFile(file, (pct) => { bar.firstElementChild.style.width = pct + "%"; });
+      toast(`Uploaded ${stripExt(file.name)}`);
+      await loadFiles();
+      const flags = (printer && printer.state && printer.state.flags) || {};
+      const uploaded = files.find((f) => f.name === file.name || f.path === file.name);
+      if (uploaded && flags.ready && info && info.permissions.print) printFile(uploaded);
+    } catch (e) {
+      toast(e.message || "Upload failed");
+    } finally {
+      bar.hidden = true;
+    }
+  });
+
+  // XHR instead of fetch for upload progress.
+  function uploadFile(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", ROOT + "api/files/local");
+      xhr.setRequestHeader("X-Api-Key", apiKey);
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) return resolve();
+        let msg = "Upload failed";
+        try { msg = JSON.parse(xhr.responseText).error || msg; } catch (e) { /* not json */ }
+        if (xhr.status === 409) msg = "A file with that name is printing right now";
+        reject(new Error(msg));
+      };
+      xhr.onerror = () => reject(new Error("Upload failed"));
+      xhr.send(form);
+    });
+  }
+
   // ---------- push ----------
 
   const EVENT_LABELS = {
@@ -636,8 +681,12 @@
     note.className = "note";
 
     if (!window.isSecureContext) {
-      note.className = "note warn";
-      note.textContent = "Notifications need an https:// address. Set up Tailscale HTTPS on the Pi (see the README) and open PrintPocket from that address.";
+      if (info && info.ntfy) {
+        note.textContent = "This printer sends notifications through the ntfy app. The topic to subscribe to is in OctoPrint under Settings, PrintPocket.";
+      } else {
+        note.className = "note warn";
+        note.textContent = "To get notifications, set up ntfy in OctoPrint under Settings, PrintPocket. Notifications straight to this icon need an https:// address.";
+      }
       return;
     }
     if (isIOS() && !isStandalone()) {
@@ -776,7 +825,10 @@
     for (const b of document.querySelectorAll(".tabs button")) b.classList.toggle("active", b.dataset.tab === tab);
     for (const t of ["printer", "files", "alerts"]) $("tab-" + t).hidden = t !== tab;
     if (tab === "printer") startCamera(); else stopCamera();
-    if (tab === "files") loadFiles();
+    if (tab === "files") {
+      $("upload-btn").hidden = !(info && info.permissions.upload);
+      loadFiles();
+    }
     if (tab === "alerts") setupPushUI();
     window.scrollTo(0, 0);
   }
@@ -787,6 +839,38 @@
     if (!(await confirmDlg("Sign out?", "This device will need to be approved again. Notifications stay on until you turn them off.", "Sign out", true))) return;
     signOut();
   };
+
+  $("pair-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const code = $("pair-code").value.replace(/[^a-z0-9]/gi, "");
+    if (code.length < 6) return toast("The code has 6 letters and numbers");
+    $("pair-go").disabled = true;
+    try {
+      const r = await fetch(ROOT + "plugin/printpocket/api/pair/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, device: deviceName() }),
+        credentials: "omit",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        $("login-msg").textContent = j.error || "That code didn't work.";
+        return;
+      }
+      $("pair-code").value = "";
+      await useKey(j.api_key);
+    } catch (e) {
+      $("login-msg").textContent = "Can't reach OctoPrint from here.";
+    } finally {
+      $("pair-go").disabled = false;
+    }
+  };
+  $("pair-code").addEventListener("input", (ev) => {
+    // Show as "ABC DEF" while typing.
+    const raw = ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    ev.target.value = raw.length > 3 ? raw.slice(0, 3) + " " + raw.slice(3) : raw;
+    $("login-msg").textContent = "Connect this phone to your printer.";
+  });
 
   $("login-start").onclick = startLogin;
   $("login-cancel").onclick = () => { stopLoginPoll(); showLogin(); };

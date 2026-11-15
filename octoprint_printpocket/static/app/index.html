@@ -21,16 +21,22 @@
   <div class="box">
     <img src="static/app/icons/icon-192.png" alt="">
     <h1>PrintPocket</h1>
-    <p id="login-msg">Connect this device to OctoPrint.</p>
-    <button id="login-start" class="btn primary">Connect</button>
+    <p id="login-msg">Connect this phone to your printer.</p>
+    <form id="pair-form" autocomplete="off">
+      <input id="pair-code" type="text" inputmode="text" autocapitalize="characters" autocomplete="one-time-code"
+             spellcheck="false" maxlength="7" placeholder="Pairing code" class="code-input">
+      <button id="pair-go" class="btn primary" type="submit">Pair</button>
+    </form>
+    <p class="hint">Get a code in OctoPrint on your computer: Settings, PrintPocket, <em>Show a pairing code</em>.</p>
     <div id="login-wait" hidden>
       <p>Approve <strong>PrintPocket</strong> in the popup on any open OctoPrint page, or:</p>
       <a id="login-approve" class="btn" target="_blank" rel="noopener">Approve here</a>
       <button id="login-cancel" class="btn">Cancel</button>
     </div>
     <details>
-      <summary>Use an API key instead</summary>
-      <p style="margin-top:12px">In OctoPrint go to Settings, Application Keys, enter <em>PrintPocket</em> and press Generate. Paste the key here.</p>
+      <summary>Other ways to connect</summary>
+      <button id="login-start" class="btn" style="margin-top:12px">Request access from OctoPrint</button>
+      <p style="margin-top:12px">Or in OctoPrint go to Settings, Application Keys, enter <em>PrintPocket</em> and press Generate. Paste the key here.</p>
       <input id="login-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="API key">
       <button id="login-key-save" class="btn">Save key</button>
     </details>
@@ -95,7 +101,11 @@
 
     <!-- Files tab -->
     <section id="tab-files" hidden>
-      <input id="search" class="search" type="search" placeholder="Search files">
+      <div class="files-bar">
+        <input id="search" class="search" type="search" placeholder="Search files">
+        <label class="btn primary small upload" id="upload-btn">Upload<input id="upload" type="file" hidden></label>
+      </div>
+      <div id="upload-progress" class="upload-progress" hidden><div></div></div>
       <ul id="files" class="list"></ul>
     </section>
 

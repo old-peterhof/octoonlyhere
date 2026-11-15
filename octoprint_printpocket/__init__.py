@@ -1,10 +1,12 @@
-"""PrintPocket: a phone-first web app and push notifications for OctoPrint.
+"""PrintPocket: a phone-first web app and notifications for OctoPrint.
 
 The app lives at http://<your-pi>/plugin/printpocket/ and talks to OctoPrint's
 own REST API with an application key. This plugin adds:
 
 * the installable web app (PWA) itself
 * Web Push notifications for print events, sent straight from the Pi
+* ntfy notifications, for setups without HTTPS (NetBird, plain VPNs)
+* pairing codes, so a phone signs in without typing a password
 * a webcam snapshot endpoint that works even when the snapshot URL is only
   reachable from the Pi (the OctoPi default is http://127.0.0.1:8080/...)
 """
@@ -20,7 +22,17 @@ from flask_login import current_user
 from octoprint.access.permissions import Permissions
 from octoprint.events import Events
 
+from .ntfy import NtfySender, new_topic_url, valid_topic_url
+from .pairing import LockedOut, PairingCodes
 from .push import ALL_EVENTS, DEFAULT_EVENTS, PushSender, SubscriptionStore, VapidKeys
+
+# Events that get a webcam picture attached on ntfy.
+SNAPSHOT_EVENTS = ("done", "failed", "paused", "filament", "error")
+
+# csrf_exempt arrived in OctoPrint 1.8.3; older versions don't check CSRF on plugins.
+_csrf_exempt = getattr(
+    octoprint.plugin.BlueprintPlugin, "csrf_exempt", lambda: (lambda f: f)
+)
 
 APP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "app")
 
@@ -71,6 +83,7 @@ class PrintPocketPlugin(
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.SettingsPlugin,
     octoprint.plugin.TemplatePlugin,
+    octoprint.plugin.AssetPlugin,
     octoprint.plugin.BlueprintPlugin,
     octoprint.plugin.EventHandlerPlugin,
     octoprint.plugin.ProgressPlugin,
@@ -79,6 +92,8 @@ class PrintPocketPlugin(
         self._keys = None
         self._store = None
         self._sender = None
+        self._ntfy = None
+        self._pairing = PairingCodes()
         self._last_progress_step = -1
 
     # ~~ lifecycle
@@ -97,6 +112,7 @@ class PrintPocketPlugin(
         self._sender = PushSender(
             self._keys, self._store, self._settings.get(["vapid_subject"]), self._logger
         )
+        self._ntfy = NtfySender(self._logger)
 
     def on_after_startup(self):
         self._logger.info(
@@ -111,7 +127,15 @@ class PrintPocketPlugin(
             "progress_step": 25,
             "vapid_subject": "mailto:printpocket@users.noreply.github.com",
             "printer_name": "",
+            "app_url": "",
+            "ntfy_url": "",
+            "ntfy_token": "",
+            "ntfy_events": list(DEFAULT_EVENTS),
+            "ntfy_snapshot": True,
         }
+
+    def get_settings_restricted_paths(self):
+        return {"admin": [["ntfy_token"], ["ntfy_url"]]}
 
     def on_settings_save(self, data):
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
@@ -122,7 +146,10 @@ class PrintPocketPlugin(
         return True
 
     def get_template_configs(self):
-        return [{"type": "settings", "custom_bindings": False}]
+        return [{"type": "settings", "custom_bindings": True}]
+
+    def get_assets(self):
+        return {"js": ["js/printpocket_settings.js"]}
 
     # ~~ helpers
 
@@ -142,7 +169,25 @@ class PrintPocketPlugin(
             self._logger.exception("Could not list webcams")
             return {}
 
+    def _take_snapshot(self, wanted=None):
+        """JPEG bytes from the first webcam that can take snapshots, or None."""
+        webcams = self._webcams()
+        cam = webcams.get(wanted) if wanted else None
+        if cam is None:
+            cam = next((w for w in webcams.values() if w.config.canSnapshot), None)
+        if cam is None or not cam.config.canSnapshot:
+            return None
+        provider = self._plugin_manager.get_plugin_info(cam.providerIdentifier)
+        if provider is None or provider.implementation is None:
+            return None
+        try:
+            return b"".join(provider.implementation.take_webcam_snapshot(cam.config.name))
+        except Exception as e:
+            self._logger.warning("Snapshot from %s failed: %s", cam.config.name, e)
+            return None
+
     def _notify(self, event, title, body, tag=None):
+        self._notify_ntfy(event, title, body)
         if not self._sender or not self._keys:
             return 0
         payload = {
@@ -155,6 +200,29 @@ class PrintPocketPlugin(
             "url": "/plugin/printpocket/",
         }
         return self._sender.send(event, payload)
+
+    def _notify_ntfy(self, event, title, body, force=False, background=True):
+        url = self._settings.get(["ntfy_url"])
+        if not self._ntfy or not valid_topic_url(url):
+            return False
+        if not force and event not in (self._settings.get(["ntfy_events"]) or []):
+            return False
+        image = None
+        if self._settings.get_boolean(["ntfy_snapshot"]) and (
+            event in SNAPSHOT_EVENTS or event == "test"
+        ):
+            image = self._take_snapshot()
+        app_url = (self._settings.get(["app_url"]) or "").strip() or None
+        return self._ntfy.send(
+            url,
+            event,
+            title,
+            body,
+            token=(self._settings.get(["ntfy_token"]) or "").strip() or None,
+            click=app_url,
+            image=image,
+            background=background,
+        )
 
     # ~~ events
 
@@ -316,30 +384,17 @@ class PrintPocketPlugin(
                 "control": current_user.has_permission(Permissions.CONTROL),
                 "print": current_user.has_permission(Permissions.PRINT),
                 "connection": current_user.has_permission(Permissions.CONNECTION),
+                "upload": current_user.has_permission(Permissions.FILES_UPLOAD),
             },
+            ntfy=valid_topic_url(self._settings.get(["ntfy_url"])),
         )
 
     @octoprint.plugin.BlueprintPlugin.route("/api/snapshot", methods=["GET"])
     @_require(Permissions.WEBCAM)
     def api_snapshot(self):
-        webcams = self._webcams()
-        wanted = flask.request.args.get("webcam")
-        cam = webcams.get(wanted) if wanted else None
-        if cam is None:
-            cam = next((w for w in webcams.values() if w.config.canSnapshot), None)
-        if cam is None or not cam.config.canSnapshot:
-            flask.abort(404, description="No webcam that can take snapshots")
-
-        provider = self._plugin_manager.get_plugin_info(cam.providerIdentifier)
-        if provider is None or provider.implementation is None:
-            flask.abort(404, description="Webcam provider not loaded")
-
-        try:
-            chunks = provider.implementation.take_webcam_snapshot(cam.config.name)
-            data = b"".join(chunks)
-        except Exception as e:
-            self._logger.warning("Snapshot from %s failed: %s", cam.config.name, e)
-            flask.abort(502, description="Snapshot failed")
+        data = self._take_snapshot(flask.request.args.get("webcam"))
+        if data is None:
+            flask.abort(404, description="No snapshot available")
 
         resp = flask.make_response(data)
         resp.headers["Content-Type"] = "image/jpeg"
@@ -412,6 +467,61 @@ class PrintPocketPlugin(
         self._sender.send("test", payload, only_endpoint=endpoint)
         return flask.jsonify(sent=True)
 
+    # ~~ pairing
+
+    @octoprint.plugin.BlueprintPlugin.route("/api/pair", methods=["POST"])
+    @_require(Permissions.STATUS)
+    def api_pair_create(self):
+        # Called from OctoPrint's settings page with the normal browser session.
+        code, ttl = self._pairing.create(current_user.get_id())
+        return flask.jsonify(code=code, expiresIn=ttl)
+
+    @octoprint.plugin.BlueprintPlugin.route("/api/pair/claim", methods=["POST"])
+    @_csrf_exempt()
+    def api_pair_claim(self):
+        data = flask.request.get_json(silent=True) or {}
+        try:
+            user_id = self._pairing.claim(data.get("code"))
+        except LockedOut:
+            flask.abort(429, description="Too many wrong codes. Wait ten minutes.")
+        if not user_id:
+            flask.abort(404, description="That code is wrong or has expired")
+
+        appkeys = self._plugin_manager.get_plugin_info("appkeys")
+        impl = appkeys.implementation if appkeys else None
+        if impl is None or not hasattr(impl, "_add_api_key"):
+            flask.abort(501, description="OctoPrint's Application Keys plugin is not available")
+
+        device = "".join(ch for ch in str(data.get("device") or "Phone") if ch.isalnum() or ch == " ")[:20]
+        app_name = f"PrintPocket {device} {time.strftime('%Y-%m-%d %H%M')}"
+        api_key = impl._add_api_key(user_id, app_name)
+        self._logger.info("Paired a new device (%s) for user %s", device, user_id)
+        return flask.jsonify(api_key=api_key)
+
+    # ~~ ntfy
+
+    @octoprint.plugin.BlueprintPlugin.route("/api/ntfy/topic", methods=["GET"])
+    @_require(Permissions.SETTINGS)
+    def api_ntfy_topic(self):
+        server = flask.request.args.get("server") or "https://ntfy.sh"
+        return flask.jsonify(url=new_topic_url(server))
+
+    @octoprint.plugin.BlueprintPlugin.route("/api/ntfy/test", methods=["POST"])
+    @_require(Permissions.SETTINGS)
+    def api_ntfy_test(self):
+        if not valid_topic_url(self._settings.get(["ntfy_url"])):
+            flask.abort(400, description="Save an ntfy topic URL first")
+        ok = self._notify_ntfy(
+            "test",
+            f"{self._printer_name()}: test",
+            "Notifications from your printer are working.",
+            force=True,
+            background=False,
+        )
+        if not ok:
+            flask.abort(502, description="ntfy did not accept the message, see octoprint.log")
+        return flask.jsonify(sent=True)
+
     # ~~ software update
 
     def get_update_information(self):
@@ -421,9 +531,9 @@ class PrintPocketPlugin(
                 "displayVersion": self._plugin_version,
                 "type": "github_release",
                 "user": "CHANGE_ME",
-                "repo": "octoprint-printpocket",
+                "repo": "octoonlyhere",
                 "current": self._plugin_version,
-                "pip": "https://github.com/CHANGE_ME/octoprint-printpocket/archive/{target_version}.zip",
+                "pip": "https://github.com/CHANGE_ME/octoonlyhere/archive/{target_version}.zip",
             }
         }
 

@@ -2,8 +2,8 @@ from setuptools import setup
 
 setup(
     name="OctoPrint-PrintPocket",
-    version="0.1.0",
-    description="A phone-first web app and push notifications for OctoPrint. Self hosted, no cloud account.",
+    version="0.2.0",
+    description="A phone-first web app and notifications for OctoPrint. Self hosted, no cloud account.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     license="AGPLv3",
@@ -14,6 +14,7 @@ setup(
             "templates/*.jinja2",
             "static/app/*",
             "static/app/icons/*",
+            "static/js/*",
         ]
     },
     zip_safe=False,

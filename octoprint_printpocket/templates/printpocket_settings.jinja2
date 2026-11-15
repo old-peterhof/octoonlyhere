@@ -1,14 +1,22 @@
+<div id="printpocket_settings">
 <h3>PrintPocket</h3>
 
 <p>
-  Open <a href="{{ url_for('plugin.printpocket.app_index') }}" target="_blank" rel="noopener">{{ url_for('plugin.printpocket.app_index') }}</a>
-  on your phone, then use <strong>Add to Home Screen</strong>.
+  On your phone, open
+  <a href="{{ url_for('plugin.printpocket.app_index') }}" target="_blank" rel="noopener"><span data-bind="text: appUrl"></span></a>
+  and add it to your Home Screen. Use this computer's address for the Pi, or its VPN name (for example
+  <code>http://octopi.netbird.cloud/plugin/printpocket/</code>).
 </p>
-<p class="muted">
-  For notifications and away-from-home access, reach this Pi through Tailscale with HTTPS
-  (<code>sudo tailscale serve --bg 80</code>) and open the app from the
-  <code>https://&lt;pi-name&gt;.&lt;tailnet&gt;.ts.net</code> address. See the README for details.
-</p>
+
+<h4>Pair a phone</h4>
+<p class="muted">Gives a phone its own key, so it never needs your OctoPrint password. Type the code into PrintPocket on the phone.</p>
+<div style="margin-bottom: 18px">
+  <button class="btn btn-primary" data-bind="click: newCode, disable: pairing">Show a pairing code</button>
+  <span data-bind="visible: code" style="margin-left: 14px">
+    <strong data-bind="text: codePretty" style="font-size: 28px; letter-spacing: 4px; font-family: monospace; vertical-align: middle"></strong>
+    <span class="muted" style="margin-left: 8px">valid for 10 minutes, works once</span>
+  </span>
+</div>
 
 <form class="form-horizontal" onsubmit="return false;">
   <div class="control-group">
@@ -19,20 +27,80 @@
     </div>
   </div>
   <div class="control-group">
-    <label class="control-label">Progress updates every</label>
+    <label class="control-label">App address</label>
+    <div class="controls">
+      <input type="text" class="input-xxlarge" data-bind="value: settings.plugins.printpocket.app_url" placeholder="http://octopi.netbird.cloud/plugin/printpocket/">
+      <span class="help-block">Where tapping a notification takes you. Optional.</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label">Progress every</label>
     <div class="controls">
       <div class="input-append">
         <input type="number" min="0" max="50" step="5" class="input-mini" data-bind="value: settings.plugins.printpocket.progress_step">
         <span class="add-on">%</span>
       </div>
-      <span class="help-block">Only sent to devices that turned on progress alerts. 0 turns them off.</span>
+      <span class="help-block">Step for progress notifications. 0 turns them off.</span>
     </div>
   </div>
+
+  <h4>Notifications with ntfy</h4>
+  <p class="muted">
+    Works over NetBird or any VPN, no HTTPS needed. Install the free <strong>ntfy</strong> app on your phone,
+    create a topic below, save, then in the app tap + and paste the same topic URL.
+    The long random name is what keeps it private, so don't share it.
+  </p>
+  <div class="control-group">
+    <label class="control-label">Topic URL</label>
+    <div class="controls">
+      <div class="input-append">
+        <input type="text" class="input-xxlarge" data-bind="value: settings.plugins.printpocket.ntfy_url" placeholder="https://ntfy.sh/printpocket-...">
+        <button class="btn" data-bind="click: newTopic">New topic</button>
+      </div>
+      <span class="help-block">Use your own ntfy server by replacing <code>https://ntfy.sh</code>.</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label">Access token</label>
+    <div class="controls">
+      <input type="password" class="input-large" autocomplete="off" data-bind="value: settings.plugins.printpocket.ntfy_token" placeholder="Only for protected topics">
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label">Send me</label>
+    <div class="controls" data-bind="foreach: events">
+      <label class="checkbox">
+        <input type="checkbox" data-bind="checkedValue: key, checked: $parent.settings.plugins.printpocket.ntfy_events"> <span data-bind="text: label"></span>
+      </label>
+    </div>
+  </div>
+  <div class="control-group">
+    <div class="controls">
+      <label class="checkbox">
+        <input type="checkbox" data-bind="checked: settings.plugins.printpocket.ntfy_snapshot"> Attach a webcam picture (finished, failed, paused, errors)
+      </label>
+    </div>
+  </div>
+  <div class="control-group">
+    <div class="controls">
+      <button class="btn" data-bind="click: testNtfy, disable: testing">Send a test</button>
+      <span class="muted" style="margin-left: 8px">Save first if you changed the topic.</span>
+      <span data-bind="text: testResult" style="margin-left: 8px"></span>
+    </div>
+  </div>
+
+  <h4>Web Push</h4>
+  <p class="muted">
+    Notifications straight to the PrintPocket icon, without the ntfy app. Phones only allow this on an
+    <code>https://</code> address, so it needs HTTPS on the Pi (for example <code>tailscale serve</code>).
+    Each phone turns it on in its Alerts tab.
+  </p>
   <div class="control-group">
     <label class="control-label">Push contact</label>
     <div class="controls">
       <input type="text" class="input-xlarge" data-bind="value: settings.plugins.printpocket.vapid_subject">
-      <span class="help-block">A <code>mailto:</code> address sent to push services in case they need to reach the sender. Any address of yours works.</span>
+      <span class="help-block">A <code>mailto:</code> address included in push requests. Any address of yours works.</span>
     </div>
   </div>
 </form>
+</div>
